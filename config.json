@@ -1,0 +1,40 @@
+{
+  "conferences": [
+    {
+      "name": "Google I/O",
+      "youtube_channels": ["UCVHFbw7woebKtXIlUlFpyxRw"],
+      "rss_feeds": [],
+      "websites": ["https://io.google/"]
+    },
+    {
+      "name": "Flutter",
+      "youtube_channels": ["UCwXdFgeE9KYzlDdR7TG9cMw"],
+      "rss_feeds": ["https://medium.com/feed/flutter"],
+      "websites": []
+    },
+    {
+      "name": "Apple WWDC",
+      "youtube_channels": [],
+      "rss_feeds": ["https://developer.apple.com/news/releases/rss/releases.rss"],
+      "websites": ["https://developer.apple.com/wwdc/"]
+    },
+    {
+      "name": "Apple TV",
+      "youtube_channels": ["UClT2UAbC6j_bAG70sPieQVg"],
+      "rss_feeds": [],
+      "websites": []
+    },
+    {
+      "name": "Google Cloud Next",
+      "youtube_channels": ["UCJS9pqu9BzkAMNTmzNMNhvg"],
+      "rss_feeds": [],
+      "websites": []
+    },
+    {
+      "name": "Android",
+      "youtube_channels": ["UCVHFbw7woebKtXIlUlFpyxRw"],
+      "rss_feeds": ["https://android-developers.googleblog.com/feeds/posts/default"],
+      "websites": []
+    }
+  ]
+}
