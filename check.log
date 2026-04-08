@@ -1,0 +1,54 @@
+[2026-04-08 14:24:23] =========
+## 최근 1일간 새 콘텐츠 (1건)
+
+📰 [Flutter] Flutter’s Material and Cupertino code freeze
+   https://blog.flutter.dev/flutters-material-and-cupertino-code-freeze-d32d94c59c38?source=rss----4da7dfd21a33---4
+   게시: 2026-04-07T07:01:02+00:00
+
+
+## 오류 (1건)
+  - 요약 실패 (Flutter’s Material and Cupertino code fr): Client error '403 Forbidden' for url 'https://blog.flutter.dev/flutters-material-and-cupertino-code-freeze-d32d94c59c38?source=rss----4da7dfd21a33---4'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+[2026-04-08 14:30:19] =========
+## 최근 1일간 새 콘텐츠 (2건)
+
+📰 [Flutter] Flutter’s Material and Cupertino code freeze
+   https://blog.flutter.dev/flutters-material-and-cupertino-code-freeze-d32d94c59c38?source=rss----4da7dfd21a33---4
+   게시: 2026-04-07T07:01:02+00:00
+
+▶ [Google Cloud Next] Google Cloud Live: Accelerate data science and analytics with GPUs
+   https://www.youtube.com/watch?v=yBxRoYj-i28
+   게시: 2026-04-07T17:04:21Z
+
+
+## 오류 (2건)
+  - 요약 실패 (Flutter’s Material and Cupertino code fr): Client error '403 Forbidden' for url 'https://blog.flutter.dev/flutters-material-and-cupertino-code-freeze-d32d94c59c38?source=rss----4da7dfd21a33---4'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  - 요약 실패 (Google Cloud Live: Accelerate data scien): type object 'YouTubeTranscriptApi' has no attribute 'list_transcripts'
+[2026-04-08 14:31:33] =========
+## 최근 1일간 새 콘텐츠 (2건)
+
+📰 [Flutter] Flutter’s Material and Cupertino code freeze
+   https://blog.flutter.dev/flutters-material-and-cupertino-code-freeze-d32d94c59c38?source=rss----4da7dfd21a33---4
+   게시: 2026-04-07T07:01:02+00:00
+
+▶ [Google Cloud Next] Google Cloud Live: Accelerate data science and analytics with GPUs
+   https://www.youtube.com/watch?v=yBxRoYj-i28
+   게시: 2026-04-07T17:04:21Z
+
+
+## 오류 (2건)
+  - 요약 실패 (Flutter’s Material and Cupertino code fr): Client error '403 Forbidden' for url 'https://blog.flutter.dev/flutters-material-and-cupertino-code-freeze-d32d94c59c38?source=rss----4da7dfd21a33---4'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+  - 요약 실패 (Google Cloud Live: Accelerate data scien): 
+Could not retrieve a transcript for the video https://www.youtube.com/watch?v=yBxRoYj-i28! This is most likely caused by:
+
+YouTube is blocking requests from your IP. This usually is due to one of the following reasons:
+- You have done too many requests and your IP has been blocked by YouTube
+- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.
+
+There are two things you can do to work around this:
+1. Use proxies to hide your IP address, as explained in the "Working around IP bans" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).
+2. (NOT RECOMMENDED) If you authenticate your requests using cookies, you will be able to continue doing requests for a while. However, YouTube will eventually permanently ban the account that you have used to authenticate with! So only do this if you don't mind your account being banned!
+
+If you are sure that the described cause is not responsible for this error and that a transcript should be retrievable, please create an issue at https://github.com/jdepoix/youtube-transcript-api/issues. Please add which version of youtube_transcript_api you are using and provide the information needed to replicate the error. Also make sure that there are no open issues which already describe your problem!

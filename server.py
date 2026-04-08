@@ -8,6 +8,7 @@ Conference Summarizer MCP Server
 import json
 import os
 import re
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -16,11 +17,23 @@ from urllib.parse import urlparse, parse_qs
 import anthropic
 import feedparser
 import httpx
+import imageio_ffmpeg
+import whisper
+import yt_dlp
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from googleapiclient.discovery import build
 from mcp.server.fastmcp import FastMCP
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
+
+_whisper_model = None
+
+
+def _get_whisper_model():
+    global _whisper_model
+    if _whisper_model is None:
+        _whisper_model = whisper.load_model("base")
+    return _whisper_model
 
 load_dotenv()
 
@@ -72,9 +85,10 @@ def extract_youtube_id(url: str) -> str | None:
 
 
 def get_youtube_transcript(video_id: str) -> str | None:
-    """YouTube 자막 가져오기 (한국어 → 영어 순서로 시도)"""
+    """YouTube 자막 가져오기 — API 우선, 실패 시 Whisper 폴백"""
+    # 1단계: YouTube Transcript API
     try:
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        transcript_list = YouTubeTranscriptApi().list(video_id)
         for lang in ["ko", "en", "en-US"]:
             try:
                 t = transcript_list.find_transcript([lang])
@@ -82,16 +96,67 @@ def get_youtube_transcript(video_id: str) -> str | None:
                 return " ".join(e.text for e in entries)
             except Exception:
                 continue
-        # 자동 생성 자막 시도
         try:
             t = transcript_list.find_generated_transcript(["en", "ko"])
             entries = t.fetch()
             return " ".join(e.text for e in entries)
         except Exception:
             pass
-    except (TranscriptsDisabled, NoTranscriptFound):
+    except Exception:
         pass
-    return None
+
+    # 2단계: Whisper 폴백
+    return get_transcript_via_whisper(video_id)
+
+
+def _get_ffmpeg_dir() -> str:
+    """imageio_ffmpeg 바이너리에 'ffmpeg' 심링크를 만들고 그 디렉토리를 반환"""
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    bin_dir = BASE_DIR / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    symlink = bin_dir / "ffmpeg"
+    if not symlink.exists():
+        symlink.symlink_to(ffmpeg_exe)
+    return str(bin_dir)
+
+
+def get_transcript_via_whisper(video_id: str) -> str | None:
+    """yt-dlp로 오디오 다운로드 후 Whisper로 음성 인식"""
+    url = f"https://www.youtube.com/watch?v={video_id}"
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        audio_path = os.path.join(tmp_dir, "audio.mp3")
+        ydl_opts = {
+            "format": "bestaudio/best",
+            "outtmpl": os.path.join(tmp_dir, "audio.%(ext)s"),
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "64",
+            }],
+            "ffmpeg_location": _get_ffmpeg_dir(),
+            "quiet": True,
+            "no_warnings": True,
+        }
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+        except Exception:
+            return None
+
+        if not os.path.exists(audio_path):
+            return None
+
+        try:
+            model = _get_whisper_model()
+            # Whisper가 시스템 PATH에서 ffmpeg를 찾으므로 bin 디렉토리를 PATH에 추가
+            env_path = os.environ.get("PATH", "")
+            os.environ["PATH"] = _get_ffmpeg_dir() + os.pathsep + env_path
+            result = model.transcribe(audio_path)
+            os.environ["PATH"] = env_path
+            return result["text"]
+        except Exception:
+            return None
 
 
 def fetch_webpage_text(url: str) -> str:
@@ -255,9 +320,6 @@ def check_new_content(days: int = 7, auto_summarize: bool = False) -> str:
         days: 확인할 기간 (기본값: 7일)
         auto_summarize: True면 발견된 콘텐츠를 자동으로 요약해 파일 저장
     """
-    if not YOUTUBE_API_KEY:
-        return "오류: YOUTUBE_API_KEY 환경변수가 설정되지 않았습니다."
-
     cfg = load_config()
     cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days)
     cutoff_iso = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
