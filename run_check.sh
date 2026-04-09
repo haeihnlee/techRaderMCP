@@ -31,10 +31,14 @@ EOF
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] =========" >> "$LOG_FILE"
 echo "$RESULT" >> "$LOG_FILE"
 
-# 새 콘텐츠가 있으면 데스크탑 알림
+# 새 콘텐츠가 있으면 알림
 COUNT=$(echo "$RESULT" | grep -cE "^[▶📰]" || true)
 if [ "$COUNT" -gt 0 ]; then
+    # 데스크탑 알림
     DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus \
         notify-send "🎉 컨퍼런스 새 콘텐츠" "${COUNT}개의 새 영상/글이 있습니다" \
         --urgency=normal --icon=dialog-information 2>/dev/null || true
+
+    # Teams / 이메일 알림
+    "$PYTHON" "$SCRIPT_DIR/notify.py" "$RESULT" >> "$LOG_FILE" 2>&1
 fi

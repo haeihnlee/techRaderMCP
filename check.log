@@ -52,3 +52,33 @@ There are two things you can do to work around this:
 2. (NOT RECOMMENDED) If you authenticate your requests using cookies, you will be able to continue doing requests for a while. However, YouTube will eventually permanently ban the account that you have used to authenticate with! So only do this if you don't mind your account being banned!
 
 If you are sure that the described cause is not responsible for this error and that a transcript should be retrievable, please create an issue at https://github.com/jdepoix/youtube-transcript-api/issues. Please add which version of youtube_transcript_api you are using and provide the information needed to replicate the error. Also make sure that there are no open issues which already describe your problem!
+[2026-04-09 09:05:18] =========
+[download]   0.0% of    3.51MiB at  153.08KiB/s ETA 00:23[download]   0.1% of    3.51MiB at  386.80KiB/s ETA 00:09[download]   0.2% of    3.51MiB at  808.80KiB/s ETA 00:04[download]   0.4% of    3.51MiB at    1.54MiB/s ETA 00:02[download]   0.9% of    3.51MiB at    2.93MiB/s ETA 00:01[download]   1.8% of    3.51MiB at    4.53MiB/s ETA 00:00[download]   3.5% of    3.51MiB at    5.81MiB/s ETA 00:00[download]   7.1% of    3.51MiB at    8.60MiB/s ETA 00:00[download]  14.2% of    3.51MiB at   13.44MiB/s ETA 00:00[download]  28.4% of    3.51MiB at   19.37MiB/s ETA 00:00[download]  56.9% of    3.51MiB at   23.19MiB/s ETA 00:00[download] 100.0% of    3.51MiB at    9.72MiB/s ETA 00:00[download] 100% of    3.51MiB in 00:00:00 at 6.48MiB/s                                                         [download]   0.0% of    6.32MiB at   46.08KiB/s ETA 02:20[download]   0.0% of    6.32MiB at  131.23KiB/s ETA 00:49[download]   0.1% of    6.32MiB at  295.96KiB/s ETA 00:21[download]   0.2% of    6.32MiB at  613.95KiB/s ETA 00:10[download]   0.5% of    6.32MiB at  407.52KiB/s ETA 00:15[download]   1.0% of    6.32MiB at  476.84KiB/s ETA 00:13[download]   2.0% of    6.32MiB at  643.87KiB/s ETA 00:09[download]   3.9% of    6.32MiB at  961.35KiB/s ETA 00:06[download]   7.9% of    6.32MiB at    1.50MiB/s ETA 00:03[download]  15.8% of    6.32MiB at    2.15MiB/s ETA 00:02[download]  31.7% of    6.32MiB at    2.63MiB/s ETA 00:01[download]  63.3% of    6.32MiB at    3.02MiB/s ETA 00:00[download] 100.0% of    6.32MiB at    3.20MiB/s ETA 00:00[download] 100% of    6.32MiB in 00:00:02 at 2.45MiB/s                                                         ## 최근 1일간 새 콘텐츠 (5건)
+
+▶ [Flutter] Flutter AI skills | Observable Flutter #88
+   https://www.youtube.com/watch?v=2h3teBoAHQY
+   게시: 2026-04-08T17:22:10Z
+
+▶ [Flutter] Stateful widgets in Flutter
+   https://www.youtube.com/watch?v=Gzz8FwSlsUg
+   게시: 2026-04-08T16:00:15Z
+
+📰 [Apple WWDC] iOS 26.4.1 (23E254)
+   https://developer.apple.com/news/releases/?id=04082026a
+   게시: 2026-04-08T08:00:00+00:00
+
+📰 [Apple WWDC] iPadOS 26.4.1 (23E254)
+   https://developer.apple.com/news/releases/?id=04082026b
+   게시: 2026-04-08T08:00:00+00:00
+
+▶ [Google Cloud Next] How to add persistent memory to your AI agent
+   https://www.youtube.com/watch?v=HDqzJJhZsxw
+   게시: 2026-04-08T15:56:42Z
+
+
+## 저장된 요약 파일 (5개)
+  - /home/haen/conference-mcp/summaries/flutter/20260409_090324_Flutter_AI_skills__Observable_Flutter_88.md
+  - /home/haen/conference-mcp/summaries/flutter/20260409_090359_Stateful_widgets_in_Flutter.md
+  - /home/haen/conference-mcp/summaries/apple_wwdc/20260409_090413_iOS_2641_23E254.md
+  - /home/haen/conference-mcp/summaries/apple_wwdc/20260409_090429_iPadOS_2641_23E254.md
+  - /home/haen/conference-mcp/summaries/google_cloud_next/20260409_090517_How_to_add_persistent_memory_to_your_AI_agent.md

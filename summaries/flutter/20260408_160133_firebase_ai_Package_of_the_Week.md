@@ -6,39 +6,53 @@
 
 ---
 
-## 핵심 요약 (3줄)
-- `firebase_ai` 패키지는 Flutter 앱에서 Gemini 및 Imagen API를 서버리스로 직접 호출할 수 있는 올인원 패키지다.
-- 텍스트 생성, 이미지 생성/편집, 실시간 스트리밍(Live API), 멀티턴 대화(Chat) 등 다양한 AI 기능을 지원한다.
-- Firebase 프로젝트 연동 후 몇 줄의 코드만으로 Gemini 모델을 Flutter 앱에 통합할 수 있다.
+## 🔑 핵심 요약
+- `firebase_ai` 패키지는 Flutter 앱에서 **Gemini** 및 **Imagine API**에 직접 접근할 수 있는 올인원 서버리스 패키지
+- 텍스트, 이미지, 영상, 오디오, 문서 등 **멀티모달 입력**을 지원하며 이미지 생성까지 가능
+- **단일 턴(Single-turn)** 및 **멀티 턴(Multi-turn) 대화** 모두 지원
 
 ---
 
-## 주요 발표 내용
+## 📣 주요 발표 내용
 
-- **패키지 구성**: `firebase_core` + `firebase_ai` 두 패키지 추가 및 `FlutterFire Configure` 명령으로 Firebase 프로젝트 연동
-- **지원 모델 타입 3가지**
-  - `GenerativeModel` : 텍스트 등 일반 콘텐츠 생성 (싱글턴 인터랙션)
-  - `LiveModel` : Gemini Live API를 통한 입출력 실시간 스트리밍
-  - `ImagenModel` : 이미지 생성 및 편집 (Imagen API)
-- **프롬프트 구성**: 텍스트, 이미지, 영상, 오디오, 문서 등 멀티모달 입력 지원
-- **이미지 생성 모델** (Gemini Flash Image, 코드명 "Nano Banana"):
-  - `GenerationConfig`에서 응답 타입을 `text + image`로 명시 필요
-  - 응답에서 `inlineData` 파트로 이미지 데이터 추출
-- **멀티턴 대화**: `model.startChat()` 호출 후 `sendMessage()`로 대화 진행, Firebase AI Logic이 자동으로 채팅 히스토리 관리
+- 🔧 **시작 절차**
+  - Firebase Console에서 프로젝트 생성 후 **Gemini Developer in Firebase AI Logic API** 활성화 필요
+  - `firebase_core` 및 `firebase_ai` 패키지를 Flutter 프로젝트에 추가
+  - `flutterfire configure` 명령어로 Flutter 앱과 Firebase 프로젝트 연결
+
+- 🤖 **지원 모델 유형 3가지**
+
+| 모델 타입 | 설명 |
+|---|---|
+| `GenerativeModel` | 텍스트 등 일반 콘텐츠 생성 |
+| `LiveModel` | **Gemini Live API**를 통한 스트리밍 입출력 |
+| `ImagineModel` | 이미지 생성 기능 접근 |
+
+- 🖼️ **이미지 생성/편집**
+  - `Gemini Flash Image Model` (코드명: **Nano Banana**) 사용
+  - `GenerationConfig`에서 응답 타입을 **텍스트 + 이미지**로 지정 필요
+  - 응답에서 `inlineData` 파트를 통해 이미지 데이터 추출
+
+- 💬 **멀티 턴 대화(Chat)**
+  - 동일한 모델 객체에서 `startChat()` 메서드 호출
+  - `sendMessage()`로 메시지 전송 및 응답 파싱
+  - **Firebase AI Logic**이 전체 대화 히스토리를 자동으로 관리
 
 ---
 
-## 개발자에게 중요한 포인트
+## 💡 개발자 포인트
 
-- **Firebase Console 설정 필수**: 프로젝트 생성 후 *Gemini Developer in Firebase AI Logic APIs* 명시적 활성화 필요
-- **모델 초기화 시 Provider 지정**: `GeminiDeveloperApiProvider` + 모델명을 명시적으로 전달해야 함
-- **이미지 응답 파싱 주의**: 일반 텍스트 응답과 달리 이미지 생성 시 `response.inlineDataParts`에서 별도 추출 로직 필요
-- **멀티턴 대화 구현 간소화**: 직접 히스토리 배열을 관리할 필요 없이 `startChat()` + `sendMessage()` 패턴으로 SDK가 자동 처리
-- **서버리스 구조**: 별도 백엔드 없이 Flutter 클라이언트에서 직접 Gemini/Imagen API 호출 가능 → 빠른 프로토타이핑에 유리
-- **pub.dev 참고**: 추가 모델 옵션 및 상세 API 문서는 [pub.dev](https://pub.dev) 확인 권장
+- 프롬프트는 `Content` 객체 리스트로 구성하며, 텍스트 외에도 **이미지·비디오·오디오·문서** 포함 가능
+- 단일 응답이 필요하면 `generateContent()` 메서드 사용
+- 멀티 턴 대화가 필요하면 `startChat()` → `sendMessage()` 패턴 사용
+
+> ⚠️ **이미지 생성 모델 사용 시**, 반드시 `GenerationConfig`를 통해 응답 타입(텍스트/이미지)을 명시적으로 지정해야 하며, 응답 파싱 방식이 일반 텍스트 모델과 **다름**에 주의
+
+- 서버 없이 **Flutter 앱 클라이언트에서 직접 Gemini API 호출** 가능 → 백엔드 구축 비용 절감
+- 자세한 정보는 `pub.dev`의 `firebase_ai` 패키지 페이지 참고
 
 ---
 
-## 출시 일정 / 버전 정보
+## 📅 버전 / 출시 일정
 
-해당 없음 (영상 내 특정 버전 번호 또는 출시 예정일 언급 없음)
+해당 없음 (영상 내 구체적인 버전 및 출시 일정 정보 없음)
