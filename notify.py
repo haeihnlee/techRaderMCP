@@ -37,7 +37,6 @@ def parse_items(text: str) -> list[dict]:
         if line.startswith("▶") or line.startswith("📰"):
             icon = "▶" if line.startswith("▶") else "📰"
             content = line[1:].strip()
-            # Try to extract URL (last token starting with http)
             url = ""
             parts = content.rsplit(" ", 1)
             if len(parts) == 2 and parts[1].startswith("http"):
@@ -45,6 +44,25 @@ def parse_items(text: str) -> list[dict]:
                 content = parts[0]
             items.append({"icon": icon, "title": content, "url": url})
     return items
+
+
+def parse_saved_files(text: str) -> list[Path]:
+    """Extract saved summary file paths from check_new_content() output."""
+    files = []
+    in_section = False
+    for line in text.splitlines():
+        if "저장된 요약 파일" in line:
+            in_section = True
+            continue
+        if in_section:
+            stripped = line.strip().lstrip("- ").strip()
+            if stripped.endswith(".md") and Path(stripped).exists():
+                files.append(Path(stripped))
+            elif not stripped:
+                pass
+            elif stripped.startswith("##") or stripped.startswith("오류"):
+                break
+    return files
 
 
 # ─── Teams helpers ────────────────────────────────────────────────────────────
@@ -72,6 +90,7 @@ def _adaptive_card(body: list, actions: list = None) -> dict:
         "type": "AdaptiveCard",
         "version": "1.4",
         "body": body,
+        "msteams": {"width": "Full"},
     }
     if actions:
         card["actions"] = actions
@@ -103,19 +122,11 @@ def send_teams(items: list[dict], full_text: str) -> bool:
                      "isSubtle": True, "size": "Small", "spacing": "Small"})
 
     body = [
-        {
-            "type": "Container",
-            "style": "emphasis",
-            "bleed": True,
-            "items": [
-                {"type": "TextBlock", "text": "🎉  새 컨퍼런스 콘텐츠",
-                 "size": "Large", "weight": "Bolder"},
-                {"type": "TextBlock",
-                 "text": f"{now}  ·  **{count}개** 발견",
-                 "isSubtle": True, "spacing": "Small"},
-            ]
-        },
-        {"type": "Container", "spacing": "Medium", "items": rows},
+        {"type": "TextBlock", "text": "🎉  새 컨퍼런스 콘텐츠",
+         "size": "Large", "weight": "Bolder"},
+        {"type": "TextBlock", "text": f"{now}  ·  **{count}개** 발견",
+         "isSubtle": True, "spacing": "Small"},
+        *([{**rows[0], "separator": True, "spacing": "Medium"}, *rows[1:]] if rows else []),
     ]
 
     payload = _adaptive_card(body)
@@ -127,11 +138,42 @@ def send_teams(items: list[dict], full_text: str) -> bool:
 
 # ─── Teams: single summary file ───────────────────────────────────────────────
 
-def _extract_section(text: str, heading: str) -> str:
+def _clean_for_teams(text: str) -> str:
+    """Adaptive Card TextBlock에서 지원하지 않는 마크다운 제거"""
+    lines = []
+    for line in text.splitlines():
+        line = line.lstrip("> ")                            # blockquote 제거
+        line = re.sub(r"`([^`]+)`", r"\1", line)           # backtick 코드 제거
+        line = re.sub(r"\*\*([^*]+)\*\*", r"\1", line)    # bold 마커 제거 (내용 유지)
+        line = re.sub(r"\*([^*]+)\*", r"\1", line)         # italic 마커 제거 (내용 유지)
+        line = re.sub(r"^#+\s*", "", line)                  # 헤더 # 제거
+        line = re.sub(r"\|.*\|", "", line)                  # 테이블 행 제거
+        line = re.sub(r"^[-=]{3,}$", "", line)              # 구분선 제거
+        lines.append(line)
+    return "\n".join(l for l in lines if l.strip())
+
+
+def _table_to_facts(text: str) -> list[dict]:
+    """마크다운 테이블을 FactSet facts 리스트로 변환"""
+    facts = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not (line.startswith("|") and line.endswith("|")):
+            continue
+        if re.match(r"^\|[\s\-:|]+\|$", line):  # separator row skip
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if len(cells) >= 2 and cells[0] and cells[1]:
+            facts.append({"title": cells[0], "value": cells[1]})
+    return facts
+
+
+def _extract_section(text: str, keyword: str) -> str:
+    """heading에 keyword가 포함된 ## 섹션 추출 (이모지 있어도 매칭)"""
     result = []
     in_section = False
     for line in text.splitlines():
-        if line.strip().startswith(f"## {heading}"):
+        if line.startswith("## ") and keyword in line:
             in_section = True
             continue
         if in_section:
@@ -163,108 +205,86 @@ def post_file_to_teams(filepath: str | Path) -> bool:
 
     # 섹션 추출
     summary_3   = _extract_section(text, "핵심 요약")
-    main_points = _extract_section(text, "주요 발표 내용")
-    dev_points  = _extract_section(text, "개발자에게 중요한 포인트")
-    schedule    = _extract_section(text, "출시 일정")
+    main_points = _extract_section(text, "주요 발표")
+    dev_points  = _extract_section(text, "개발자")
+    schedule    = _extract_section(text, "출시 일정") or _extract_section(text, "버전")
 
-    # 핵심 요약 → bullet TextBlock
-    bullets = "\n".join(
+    # 핵심 요약 → 항목별 TextBlock (최대 5줄)
+    summary_bullet_lines = [
         "• " + l.lstrip("- ").strip()
-        for l in summary_3.splitlines() if l.strip().lstrip("- ")
-    )
+        for l in _clean_for_teams(summary_3).splitlines() if l.strip().lstrip("- ")
+    ][:5]
 
-    # 주요 내용 → FactSet
-    facts = []
-    for line in main_points.splitlines():
-        line = line.strip().lstrip("- ")
-        if not line:
+    # 주요 내용 → 항목별 TextBlock (들여쓰기 하위항목 포함)
+    main_point_lines = []
+    for raw in _clean_for_teams(main_points).splitlines():
+        if not raw.strip():
             continue
-        if "**" in line:
-            parts = line.split("**", 2)
-            if len(parts) >= 3:
-                facts.append({"title": parts[1], "value": parts[2].lstrip(":").strip()})
-                continue
-        if facts:
-            facts[-1]["value"] += " " + line
-        else:
-            facts.append({"title": "•", "value": line})
+        is_sub = raw != raw.lstrip()  # 들여쓰기 여부
+        content = raw.strip().lstrip("- ").strip()
+        if not content:
+            continue
+        main_point_lines.append("  ↳ " + content if is_sub else "• " + content)
 
-    # 개발자 포인트 → bullet TextBlock
-    dev_bullets = "\n".join(
+    # 개발자 포인트 → 항목별 TextBlock (줄바꿈 보장)
+    dev_bullet_lines = [
         "• " + l.lstrip("- ").strip()
-        for l in dev_points.splitlines() if l.strip().lstrip("- ")
-    )
+        for l in _clean_for_teams(dev_points).splitlines() if l.strip().lstrip("- ")
+    ]
 
     icon = "🎬" if source_url and "youtube" in source_url else "📰"
     conf_label = f"{icon}  {conference}" if conference else icon
 
     body = [
         # 헤더
-        {
-            "type": "Container",
-            "style": "emphasis",
-            "bleed": True,
-            "items": [
-                {"type": "TextBlock", "text": conf_label,
-                 "size": "Small", "color": "Accent", "weight": "Bolder", "spacing": "None"},
-                {"type": "TextBlock", "text": title,
-                 "size": "Large", "weight": "Bolder", "wrap": True, "spacing": "Small"},
-                {"type": "TextBlock",
-                 "text": summary_date,
-                 "isSubtle": True, "size": "Small", "spacing": "Small"},
-            ]
-        },
+        {"type": "TextBlock", "text": conf_label,
+         "size": "Small", "color": "Accent", "weight": "Bolder"},
+        {"type": "TextBlock", "text": title,
+         "size": "Large", "weight": "Bolder", "wrap": True, "spacing": "Small"},
+        {"type": "TextBlock", "text": summary_date,
+         "isSubtle": True, "size": "Small", "spacing": "Small"},
         # 핵심 요약
-        {
-            "type": "Container",
-            "spacing": "Medium",
-            "items": [
-                {"type": "TextBlock", "text": "📌  핵심 요약",
-                 "weight": "Bolder", "color": "Accent"},
-                {"type": "TextBlock", "text": bullets,
-                 "wrap": True, "spacing": "Small"},
-            ]
-        },
+        {"type": "TextBlock", "text": "📌  핵심 요약",
+         "weight": "Bolder", "color": "Accent", "size": "Large", "separator": True, "spacing": "Large"},
+        *[
+            {"type": "TextBlock", "text": line, "wrap": True,
+             "spacing": "Small" if i == 0 else "None"}
+            for i, line in enumerate(summary_bullet_lines)
+        ],
     ]
 
-    if facts:
+    if main_point_lines:
         body += [
-            {"type": "Separator"},
-            {
-                "type": "Container",
-                "items": [
-                    {"type": "TextBlock", "text": "📋  주요 발표 내용", "weight": "Bolder"},
-                    {"type": "FactSet", "facts": facts[:8], "spacing": "Small"},
-                ]
-            },
+            {"type": "TextBlock", "text": "📋  주요 발표 내용",
+             "weight": "Bolder", "color": "Accent", "size": "Large", "separator": True, "spacing": "Large"},
+            *[
+                {"type": "TextBlock", "text": line, "wrap": True,
+                 "spacing": "Small" if i == 0 else "None"}
+                for i, line in enumerate(main_point_lines)
+            ],
         ]
 
-    if dev_bullets:
+    if dev_bullet_lines:
         body += [
-            {"type": "Separator"},
-            {
-                "type": "Container",
-                "style": "warning",
-                "items": [
-                    {"type": "TextBlock", "text": "💡  개발자 포인트", "weight": "Bolder"},
-                    {"type": "TextBlock", "text": dev_bullets,
-                     "wrap": True, "spacing": "Small"},
-                ]
-            },
+            {"type": "TextBlock", "text": "💡  개발자 포인트",
+             "weight": "Bolder", "color": "Accent", "size": "Large", "separator": True, "spacing": "Large"},
+            *[
+                {"type": "TextBlock", "text": line, "wrap": True,
+                 "spacing": "Small" if i == 0 else "None"}
+                for i, line in enumerate(dev_bullet_lines)
+            ],
         ]
 
     if schedule:
-        body += [
-            {"type": "Separator"},
-            {
-                "type": "Container",
-                "items": [
-                    {"type": "TextBlock", "text": "📅  출시 일정", "weight": "Bolder"},
-                    {"type": "TextBlock", "text": schedule[:300],
-                     "wrap": True, "spacing": "Small", "isSubtle": True},
-                ]
-            },
-        ]
+        sched_facts = _table_to_facts(schedule)
+        sched_text = _clean_for_teams(schedule)[:400]
+        body.append({"type": "TextBlock", "text": "📅  버전 / 출시 일정",
+                     "weight": "Bolder", "color": "Accent", "size": "Large", "separator": True, "spacing": "Large"})
+        if sched_facts:
+            body.append({"type": "FactSet", "facts": sched_facts, "spacing": "Small"})
+        elif sched_text:
+            body.append({"type": "TextBlock", "text": sched_text,
+                         "wrap": True, "spacing": "Small", "isSubtle": True})
 
     actions = []
     if source_url:
@@ -375,5 +395,12 @@ if __name__ == "__main__":
         if not items:
             print("[notify] 새 콘텐츠 없음, 알림 스킵")
             sys.exit(0)
+
+        # 1) 새 콘텐츠 목록 다이제스트
         send_teams(items, text)
         send_email(items, text)
+
+        # 2) 저장된 요약 파일 각각 개별 게시
+        saved = parse_saved_files(text)
+        for fp in saved:
+            post_file_to_teams(fp)
