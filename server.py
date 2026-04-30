@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse, parse_qs
 
-import anthropic
 import feedparser
 import httpx
 import imageio_ffmpeg
@@ -45,7 +44,6 @@ LAST_CHECK_FILE = BASE_DIR / ".last_check.json"
 SUMMARIES_DIR.mkdir(exist_ok=True)
 
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 mcp = FastMCP("Conference Summarizer")
 
@@ -179,63 +177,6 @@ def fetch_webpage_text(url: str) -> str:
     return soup.get_text(separator="\n", strip=True)
 
 
-def summarize_with_claude(content: str, title: str, source_url: str, conference_name: str) -> str:
-    """Claude API로 컨퍼런스 콘텐츠 요약"""
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
-    # 토큰 절약을 위해 최대 12000자로 자르기
-    content_truncated = content[:12000] + ("..." if len(content) > 12000 else "")
-
-    prompt = f"""다음은 '{conference_name}' 컨퍼런스/발표 콘텐츠입니다.
-
-제목: {title}
-출처: {source_url}
-
-콘텐츠:
-{content_truncated}
-
-위 내용을 개발자 관점에서 한국어로 요약해주세요.
-
-**작성 규칙 (가독성 최우선):**
-- 섹션 제목에 이모지 아이콘을 붙여 시각적 구분을 명확히 할 것
-- API명·클래스명·플래그·명령어는 반드시 `backtick` 코드 포맷으로 표기
-- 중요 키워드·기술명은 **굵게** 강조
-- 특히 중요한 주의사항이나 Breaking Change는 > 인용문 블록으로 강조
-- 버전/날짜/수치 정보가 여러 개면 표(table)로 정리
-- bullet point는 핵심만, 한 줄에 한 가지 내용만 담을 것
-- 각 섹션 사이 구분선(---) 삽입
-
-다음 형식으로 작성하세요:
-
-## 🔑 핵심 요약
-- (핵심 내용 1)
-- (핵심 내용 2)
-- (핵심 내용 3)
-
----
-
-## 📣 주요 발표 내용
-(신기능·변경사항을 이모지 bullet로 정리. 기술명은 `코드` 또는 **굵게**)
-
----
-
-## 💡 개발자 포인트
-(실제 개발에 영향 주는 내용. Breaking Change나 주의사항은 > 블록으로 강조)
-
----
-
-## 📅 버전 / 출시 일정
-(버전·날짜 정보가 있으면 표로, 없으면 "해당 없음")
-"""
-
-    message = client.messages.create(
-        model="asf/sonnet-4.6",
-        max_tokens=2000,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return message.content[0].text
-
-
 def save_summary(conference: str, title: str, url: str, summary: str) -> Path:
     """요약을 마크다운 파일로 저장"""
     conf_dir = SUMMARIES_DIR / conference.replace(" ", "_").lower()
@@ -326,16 +267,251 @@ def fetch_rss_items(feed_url: str, published_after: datetime) -> list[dict]:
     return results
 
 
+# ── 트렌딩 소스 fetcher ──────────────────────────────────────────────────────
+
+def fetch_github_trending(limit: int = 10) -> list[dict]:
+    """GitHub 트렌딩 레포지토리 (오늘 기준) 스크래핑"""
+    headers = {"User-Agent": "Mozilla/5.0 (Conference-MCP-Bot/1.0)"}
+    with httpx.Client(timeout=20, follow_redirects=True) as client:
+        resp = client.get("https://github.com/trending", headers=headers)
+        resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "html.parser")
+
+    repos = []
+    for article in soup.select("article.Box-row")[:limit]:
+        h2 = article.select_one("h2 a")
+        if not h2:
+            continue
+        repo_path = h2.get("href", "").strip("/")
+        if not repo_path:
+            continue
+
+        desc_el = article.select_one("p")
+        description = desc_el.get_text(strip=True) if desc_el else ""
+
+        lang_el = article.select_one("[itemprop='programmingLanguage']")
+        language = lang_el.get_text(strip=True) if lang_el else ""
+
+        stars_el = article.find(string=re.compile(r"stars? today", re.I))
+        stars_today = stars_el.strip() if stars_el else ""
+
+        repos.append({
+            "title": repo_path,
+            "url": f"https://github.com/{repo_path}",
+            "description": description,
+            "language": language,
+            "stars_today": stars_today,
+            "source": "github",
+        })
+
+    return repos
+
+
+def fetch_hackernews_top(limit: int = 10) -> list[dict]:
+    """Hacker News 상위 스토리 (Firebase API)"""
+    with httpx.Client(timeout=20) as client:
+        resp = client.get("https://hacker-news.firebaseio.com/v0/topstories.json")
+        resp.raise_for_status()
+        ids = resp.json()[: limit + 5]
+
+    stories = []
+    with httpx.Client(timeout=10) as client:
+        for story_id in ids:
+            if len(stories) >= limit:
+                break
+            try:
+                resp = client.get(f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json")
+                item = resp.json()
+                if not item or item.get("type") != "story" or not item.get("title"):
+                    continue
+                stories.append({
+                    "title": item["title"],
+                    "url": item.get("url", f"https://news.ycombinator.com/item?id={story_id}"),
+                    "score": item.get("score", 0),
+                    "comments": item.get("descendants", 0),
+                    "hn_url": f"https://news.ycombinator.com/item?id={story_id}",
+                    "source": "hackernews",
+                })
+            except Exception:
+                continue
+
+    return stories
+
+
+def fetch_devto_trending(limit: int = 10) -> list[dict]:
+    """Dev.to 트렌딩 기사 (최근 7일)"""
+    with httpx.Client(timeout=20) as client:
+        resp = client.get(
+            "https://dev.to/api/articles",
+            params={"top": "7", "per_page": str(limit)},
+            headers={"User-Agent": "Mozilla/5.0 (Conference-MCP-Bot/1.0)"},
+        )
+        resp.raise_for_status()
+
+    articles = []
+    for item in resp.json()[:limit]:
+        articles.append({
+            "title": item.get("title", ""),
+            "url": item.get("url", ""),
+            "reactions": item.get("public_reactions_count", 0),
+            "comments": item.get("comments_count", 0),
+            "tags": ", ".join(item.get("tag_list", [])[:4]),
+            "source": "devto",
+        })
+
+    return articles
+
+
+def fetch_reddit_top(subreddit: str = "programming", limit: int = 10) -> list[dict]:
+    """Reddit 서브레딧 오늘의 상위 게시글"""
+    headers = {"User-Agent": "conference-mcp/1.0 (automated bot)"}
+    with httpx.Client(timeout=20, follow_redirects=True) as client:
+        resp = client.get(
+            f"https://www.reddit.com/r/{subreddit}/top.json",
+            params={"t": "day", "limit": str(limit)},
+            headers=headers,
+        )
+        resp.raise_for_status()
+
+    posts = []
+    for child in resp.json().get("data", {}).get("children", [])[:limit]:
+        d = child.get("data", {})
+        if d.get("is_self") and not d.get("selftext"):
+            continue
+        posts.append({
+            "title": d.get("title", ""),
+            "url": d.get("url", f"https://reddit.com{d.get('permalink', '')}"),
+            "score": d.get("score", 0),
+            "comments": d.get("num_comments", 0),
+            "reddit_url": f"https://reddit.com{d.get('permalink', '')}",
+            "subreddit": subreddit,
+            "source": "reddit",
+        })
+
+    return posts
+
+
+def fetch_geeknews_top(limit: int = 10) -> list[dict]:
+    """GeekNews(news.hada.io) 최신글 RSS"""
+    feed = feedparser.parse("https://feeds.feedburner.com/geeknews-feed")
+    items = []
+    for entry in feed.entries[:limit]:
+        items.append({
+            "title": entry.get("title", ""),
+            "url": entry.get("link", ""),
+            "author": entry.get("author", ""),
+            "published": entry.get("published", ""),
+            "source": "geeknews",
+        })
+    return items
+
+
 # ── MCP 도구들 ────────────────────────────────────────────────────────────────
 
 @mcp.tool()
-def check_new_content(days: int = 7, auto_summarize: bool = False) -> str:
+def get_trending(
+    sources: str = "github,hackernews,devto,geeknews",
+    limit: int = 10,
+) -> str:
+    """
+    개발 트렌딩 콘텐츠를 가져옵니다.
+    GitHub 트렌딩 레포, Hacker News 상위 기사, Dev.to 트렌딩, Reddit 인기글, GeekNews(news.hada.io)를 조회합니다.
+
+    Args:
+        sources: 쉼표로 구분된 소스 (github, hackernews, devto, reddit, geeknews)
+        limit: 각 소스별 최대 항목 수 (기본값: 10)
+    """
+    source_list = [s.strip().lower() for s in sources.split(",") if s.strip()]
+    today = datetime.now().strftime("%Y-%m-%d")
+    lines = [f"# 🔥 개발 트렌딩 — {today}\n"]
+    all_items: list[dict] = []
+    errors: list[str] = []
+
+    if "github" in source_list:
+        try:
+            repos = fetch_github_trending(limit)
+            lines.append("## ⭐ GitHub Trending (오늘)\n")
+            for r in repos:
+                lang = f" #{r['language']}" if r["language"] else ""
+                stars = f" · {r['stars_today']}" if r["stars_today"] else ""
+                lines.append(f"- **[{r['title']}]({r['url']})**{lang}{stars}")
+                if r["description"]:
+                    lines.append(f"  {r['description']}")
+            lines.append("")
+            all_items.extend(repos)
+        except Exception as e:
+            errors.append(f"GitHub Trending: {e}")
+
+    if any(s in source_list for s in ("hackernews", "hn")):
+        try:
+            stories = fetch_hackernews_top(limit)
+            lines.append("## 🟠 Hacker News Top Stories\n")
+            for s in stories:
+                lines.append(
+                    f"- **[{s['title']}]({s['url']})** (⬆{s['score']} 💬{s['comments']}) — [HN]({s['hn_url']})"
+                )
+            lines.append("")
+            all_items.extend(stories)
+        except Exception as e:
+            errors.append(f"Hacker News: {e}")
+
+    if "devto" in source_list:
+        try:
+            articles = fetch_devto_trending(limit)
+            lines.append("## 💻 Dev.to Trending (7일)\n")
+            for a in articles:
+                tags = (" " + " ".join(f"#{t.strip()}" for t in a["tags"].split(",") if t.strip())) if a["tags"] else ""
+                lines.append(
+                    f"- **[{a['title']}]({a['url']})** (❤️{a['reactions']} 💬{a['comments']}){tags}"
+                )
+            lines.append("")
+            all_items.extend(articles)
+        except Exception as e:
+            errors.append(f"Dev.to: {e}")
+
+    if any(s in source_list for s in ("geeknews", "hada")):
+        try:
+            items = fetch_geeknews_top(limit)
+            lines.append("## 🇰🇷 GeekNews (news.hada.io)\n")
+            for it in items:
+                author = f" — {it['author']}" if it.get("author") else ""
+                lines.append(f"- **[{it['title']}]({it['url']})**{author}")
+            lines.append("")
+            all_items.extend(items)
+        except Exception as e:
+            errors.append(f"GeekNews: {e}")
+
+    if "reddit" in source_list:
+        for sub in ["programming", "webdev"]:
+            try:
+                posts = fetch_reddit_top(sub, limit // 2 or 5)
+                lines.append(f"## 👾 r/{sub} Top (오늘)\n")
+                for p in posts:
+                    lines.append(
+                        f"- **[{p['title']}]({p['url']})** (⬆{p['score']} 💬{p['comments']})"
+                    )
+                lines.append("")
+                all_items.extend(posts)
+            except Exception as e:
+                errors.append(f"Reddit r/{sub}: {e}")
+
+    if errors:
+        lines.append("## ⚠️ 오류\n")
+        for e in errors:
+            lines.append(f"- {e}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def check_new_content(days: int = 7) -> str:
     """
     모든 컨퍼런스에서 최근 N일간 새 콘텐츠를 확인합니다.
+    발견 결과만 반환하며, 요약은 슬래시 커맨드(/add-link) 또는 cron이 별도로 처리합니다.
 
     Args:
         days: 확인할 기간 (기본값: 7일)
-        auto_summarize: True면 발견된 콘텐츠를 자동으로 요약해 파일 저장
     """
     cfg = load_config()
     cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days)
@@ -368,24 +544,6 @@ def check_new_content(days: int = 7, auto_summarize: bool = False) -> str:
     if not found_items and not errors:
         return f"최근 {days}일간 새 콘텐츠가 없습니다."
 
-    # 자동 요약
-    saved_files = []
-    if auto_summarize and found_items:
-        if not ANTHROPIC_API_KEY:
-            return "오류: ANTHROPIC_API_KEY가 설정되지 않아 자동 요약을 실행할 수 없습니다."
-        for item in found_items[:5]:  # 한 번에 최대 5개만 요약
-            try:
-                if item["type"] == "youtube":
-                    transcript = get_youtube_transcript(item["video_id"])
-                    content = transcript or item.get("title", "")
-                else:
-                    content = fetch_webpage_text(item["url"])
-                summary = summarize_with_claude(content, item["title"], item["url"], item["conference"])
-                fp = save_summary(item["conference"], item["title"], item["url"], summary)
-                saved_files.append(str(fp))
-            except Exception as e:
-                errors.append(f"요약 실패 ({item['title'][:40]}): {e}")
-
     # 결과 포맷
     lines = [f"## 최근 {days}일간 새 콘텐츠 ({len(found_items)}건)\n"]
     for item in found_items:
@@ -393,11 +551,6 @@ def check_new_content(days: int = 7, auto_summarize: bool = False) -> str:
         lines.append(f"{emoji} [{item['conference']}] {item['title']}")
         lines.append(f"   {item['url']}")
         lines.append(f"   게시: {item.get('published_at', '날짜 불명')}\n")
-
-    if saved_files:
-        lines.append(f"\n## 저장된 요약 파일 ({len(saved_files)}개)")
-        for f in saved_files:
-            lines.append(f"  - {f}")
 
     if errors:
         lines.append(f"\n## 오류 ({len(errors)}건)")
@@ -408,28 +561,35 @@ def check_new_content(days: int = 7, auto_summarize: bool = False) -> str:
 
 
 @mcp.tool()
-def summarize_url(url: str, conference_name: str = "기타", save: bool = True) -> str:
+def extract_url_content(url: str, conference_name: str = "기타") -> str:
     """
-    YouTube URL 또는 웹페이지 URL을 요약합니다.
+    YouTube 영상 또는 웹페이지에서 raw 콘텐츠(자막/본문)를 추출해 반환합니다.
+    요약은 호출 측(슬래시 커맨드의 Claude Code 또는 cron이 띄운 헤드리스 Claude)이 직접 작성합니다.
 
     Args:
-        url: 요약할 URL (YouTube 영상 또는 웹페이지)
-        conference_name: 컨퍼런스 이름 (저장 폴더 분류용)
-        save: True면 요약 결과를 파일로 저장
-    """
-    if not ANTHROPIC_API_KEY:
-        return "오류: ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다."
+        url: 추출할 URL (YouTube 영상 또는 웹페이지)
+        conference_name: 컨퍼런스 이름 (메타데이터, 저장 폴더 분류용)
 
+    Returns:
+        다음 형식의 마크다운:
+        ## 메타
+        - title: ...
+        - source_url: ...
+        - conference_name: ...
+        - type: youtube | webpage
+
+        ## 본문
+        <transcript 또는 webpage 본문 텍스트, 12000자 절단>
+    """
     title = url
     content = ""
+    content_type = "webpage"
 
-    # YouTube 영상 처리
     video_id = extract_youtube_id(url)
     if video_id:
+        content_type = "youtube"
         info = get_youtube_video_info(video_id)
-        title = info.get("title", url)
-        if not title:
-            title = url
+        title = info.get("title") or url
 
         transcript = get_youtube_transcript(video_id)
         if transcript:
@@ -439,10 +599,8 @@ def summarize_url(url: str, conference_name: str = "기타", save: bool = True) 
         else:
             return f"오류: 자막을 가져올 수 없습니다. (video_id: {video_id})"
     else:
-        # 일반 웹페이지 처리
         try:
             content = fetch_webpage_text(url)
-            # 페이지 제목 추출
             with httpx.Client(timeout=15, follow_redirects=True) as client:
                 resp = client.get(url, headers={"User-Agent": "Mozilla/5.0"})
                 soup = BeautifulSoup(resp.text, "html.parser")
@@ -455,15 +613,40 @@ def summarize_url(url: str, conference_name: str = "기타", save: bool = True) 
     if not content.strip():
         return "콘텐츠를 가져올 수 없습니다."
 
-    summary = summarize_with_claude(content, title, url, conference_name)
+    truncated = content[:12000] + ("..." if len(content) > 12000 else "")
 
-    result_lines = [f"# {title}\n", summary]
+    return (
+        "## 메타\n"
+        f"- title: {title}\n"
+        f"- source_url: {url}\n"
+        f"- conference_name: {conference_name}\n"
+        f"- type: {content_type}\n\n"
+        "## 본문\n"
+        f"{truncated}"
+    )
 
-    if save:
-        fp = save_summary(conference_name, title, url, summary)
-        result_lines.append(f"\n---\n저장 위치: `{fp}`")
 
-    return "\n".join(result_lines)
+@mcp.tool()
+def save_summary_text(
+    conference_name: str,
+    title: str,
+    source_url: str,
+    summary_markdown: str,
+) -> str:
+    """
+    이미 작성된 요약 마크다운을 받아 summaries/<conference>/<timestamp>_<title>.md 로 저장합니다.
+
+    Args:
+        conference_name: 컨퍼런스 이름 (저장 폴더 분류용)
+        title: 콘텐츠 제목
+        source_url: 원본 URL
+        summary_markdown: 요약 마크다운 본문 (## 🔑 핵심 요약 등 섹션 4개)
+
+    Returns:
+        저장된 파일의 절대 경로
+    """
+    fp = save_summary(conference_name, title, source_url, summary_markdown)
+    return f"✅ 저장 완료: {fp}"
 
 
 @mcp.tool()
