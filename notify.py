@@ -34,6 +34,8 @@ _CLAUDE_BIN = os.environ.get("CLAUDE_BIN", "claude")
 
 def _call_claude_cli(prompt: str, timeout: int = 180) -> str:
     """헤드리스 Claude Code CLI 호출 (Max 구독으로 처리). 실패 시 빈 문자열."""
+    cli_env = {k: v for k, v in os.environ.items()
+               if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
     try:
         result = subprocess.run(
             [
@@ -44,6 +46,8 @@ def _call_claude_cli(prompt: str, timeout: int = 180) -> str:
             ],
             capture_output=True, text=True, timeout=timeout,
             cwd=_PROJECT_DIR,
+            stdin=subprocess.DEVNULL,
+            env=cli_env,
         )
         if result.returncode != 0:
             print(f"[notify] claude CLI 실패 (rc={result.returncode}): {result.stderr[:300]}")
@@ -336,11 +340,10 @@ def send_trending_to_teams(trending_text: str) -> bool:
             "separator": True, "spacing": "Medium",
         })
         for r in data["github"][:5]:
-            lang = f"\n#{r['language']}" if r["language"] else ""
             stars = f" · ⭐ {r['stars_today']}" if r["stars_today"] else ""
             body.append({
                 "type": "TextBlock",
-                "text": f"[{r['title']}]({r['url']}){stars}{lang}",
+                "text": f"[{r['title']}]({r['url']}){stars}",
                 "wrap": True, "spacing": "Small",
             })
             ko = korean.get(r["url"], {})
@@ -348,6 +351,11 @@ def send_trending_to_teams(trending_text: str) -> bool:
             if ko_desc:
                 body.append({
                     "type": "TextBlock", "text": ko_desc,
+                    "wrap": True, "isSubtle": True, "size": "Small", "spacing": "None",
+                })
+            if r["language"]:
+                body.append({
+                    "type": "TextBlock", "text": f"#{r['language']}",
                     "wrap": True, "isSubtle": True, "size": "Small", "spacing": "None",
                 })
         body.append({
@@ -368,13 +376,18 @@ def send_trending_to_teams(trending_text: str) -> bool:
             ko_tags = ko.get("tags", "") if isinstance(ko, dict) else ""
             body.append({
                 "type": "TextBlock",
-                "text": f"[{s['title']}]({s['url']})  ⬆{s['score']} 💬{s['comments']}" + (f"\n{ko_tags}" if ko_tags else ""),
+                "text": f"[{s['title']}]({s['url']})  ⬆{s['score']} 💬{s['comments']}",
                 "wrap": True, "spacing": "Small",
             })
             ko_desc = ko.get("desc", "") if isinstance(ko, dict) else ko or ""
             if ko_desc:
                 body.append({
                     "type": "TextBlock", "text": ko_desc,
+                    "wrap": True, "isSubtle": True, "size": "Small", "spacing": "None",
+                })
+            if ko_tags:
+                body.append({
+                    "type": "TextBlock", "text": ko_tags,
                     "wrap": True, "isSubtle": True, "size": "Small", "spacing": "None",
                 })
         body.append({
@@ -391,10 +404,9 @@ def send_trending_to_teams(trending_text: str) -> bool:
             "separator": True, "spacing": "Medium",
         })
         for a in data["devto"][:5]:
-            tags = f"\n{a['tags']}" if a["tags"] else ""
             body.append({
                 "type": "TextBlock",
-                "text": f"[{a['title']}]({a['url']})  ❤️{a['reactions']}{tags}",
+                "text": f"[{a['title']}]({a['url']})  ❤️{a['reactions']}",
                 "wrap": True, "spacing": "Small",
             })
             ko = korean.get(a["url"], {})
@@ -402,6 +414,11 @@ def send_trending_to_teams(trending_text: str) -> bool:
             if ko_desc:
                 body.append({
                     "type": "TextBlock", "text": ko_desc,
+                    "wrap": True, "isSubtle": True, "size": "Small", "spacing": "None",
+                })
+            if a["tags"]:
+                body.append({
+                    "type": "TextBlock", "text": a["tags"],
                     "wrap": True, "isSubtle": True, "size": "Small", "spacing": "None",
                 })
         body.append({

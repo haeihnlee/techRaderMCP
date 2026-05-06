@@ -11,6 +11,9 @@ CLAUDE_BIN="${CLAUDE_BIN:-/home/haen/.local/bin/claude}"
 export PATH="/home/haen/.local/bin:$PATH"
 export CLAUDE_BIN
 
+# 회사 프록시/MITM 인증서를 claude CLI(Node 기반)가 신뢰하도록
+export NODE_EXTRA_CA_CERTS="$SCRIPT_DIR/ca-bundle.pem"
+
 cd "$SCRIPT_DIR"
 
 # ── 1단계: 새 콘텐츠 감지 + 트렌딩 조회 (LLM 호출 없음) ──────────────────────
@@ -65,7 +68,7 @@ while IFS= read -r line; do
             # 헤드리스 Claude Code로 /add-link 슬래시 커맨드 실행
             ADD_OUTPUT=$(timeout 200 "$CLAUDE_BIN" --print --no-session-persistence \
                 --max-budget-usd 0.50 \
-                "/add-link $URL $CONF_NAME" 2>&1)
+                "/add-link $URL $CONF_NAME" </dev/null 2>&1)
             echo "$ADD_OUTPUT" >> "$LOG_FILE"
             # 저장된 파일 경로 추출 (save_summary_text 출력: "✅ 저장 완료: <경로>")
             SAVED=$(echo "$ADD_OUTPUT" | grep -oE "/home/haen/conference-mcp/summaries/[^[:space:]]+\.md" | head -1)

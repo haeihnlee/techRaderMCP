@@ -269,6 +269,17 @@ def fetch_rss_items(feed_url: str, published_after: datetime) -> list[dict]:
 
 # ── 트렌딩 소스 fetcher ──────────────────────────────────────────────────────
 
+def _short_desc(text: str, max_len: int = 200) -> str:
+    """HTML 제거 + 공백 정리 + 1~2줄 길이로 절단."""
+    if not text:
+        return ""
+    cleaned = BeautifulSoup(text, "html.parser").get_text(" ", strip=True)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if len(cleaned) > max_len:
+        cleaned = cleaned[:max_len].rstrip() + "…"
+    return cleaned
+
+
 def fetch_github_trending(limit: int = 10) -> list[dict]:
     """GitHub 트렌딩 레포지토리 (오늘 기준) 스크래핑"""
     headers = {"User-Agent": "Mozilla/5.0 (Conference-MCP-Bot/1.0)"}
@@ -330,6 +341,7 @@ def fetch_hackernews_top(limit: int = 10) -> list[dict]:
                     "score": item.get("score", 0),
                     "comments": item.get("descendants", 0),
                     "hn_url": f"https://news.ycombinator.com/item?id={story_id}",
+                    "description": _short_desc(item.get("text", "")),
                     "source": "hackernews",
                 })
             except Exception:
@@ -356,6 +368,7 @@ def fetch_devto_trending(limit: int = 10) -> list[dict]:
             "reactions": item.get("public_reactions_count", 0),
             "comments": item.get("comments_count", 0),
             "tags": ", ".join(item.get("tag_list", [])[:4]),
+            "description": _short_desc(item.get("description", "")),
             "source": "devto",
         })
 
@@ -385,6 +398,7 @@ def fetch_reddit_top(subreddit: str = "programming", limit: int = 10) -> list[di
             "comments": d.get("num_comments", 0),
             "reddit_url": f"https://reddit.com{d.get('permalink', '')}",
             "subreddit": subreddit,
+            "description": _short_desc(d.get("selftext", "")),
             "source": "reddit",
         })
 
@@ -401,6 +415,7 @@ def fetch_geeknews_top(limit: int = 10) -> list[dict]:
             "url": entry.get("link", ""),
             "author": entry.get("author", ""),
             "published": entry.get("published", ""),
+            "description": _short_desc(entry.get("summary", "")),
             "source": "geeknews",
         })
     return items
@@ -450,6 +465,8 @@ def get_trending(
                 lines.append(
                     f"- **[{s['title']}]({s['url']})** (⬆{s['score']} 💬{s['comments']}) — [HN]({s['hn_url']})"
                 )
+                if s.get("description"):
+                    lines.append(f"  {s['description']}")
             lines.append("")
             all_items.extend(stories)
         except Exception as e:
@@ -464,6 +481,8 @@ def get_trending(
                 lines.append(
                     f"- **[{a['title']}]({a['url']})** (❤️{a['reactions']} 💬{a['comments']}){tags}"
                 )
+                if a.get("description"):
+                    lines.append(f"  {a['description']}")
             lines.append("")
             all_items.extend(articles)
         except Exception as e:
@@ -476,6 +495,8 @@ def get_trending(
             for it in items:
                 author = f" — {it['author']}" if it.get("author") else ""
                 lines.append(f"- **[{it['title']}]({it['url']})**{author}")
+                if it.get("description"):
+                    lines.append(f"  {it['description']}")
             lines.append("")
             all_items.extend(items)
         except Exception as e:
@@ -490,6 +511,8 @@ def get_trending(
                     lines.append(
                         f"- **[{p['title']}]({p['url']})** (⬆{p['score']} 💬{p['comments']})"
                     )
+                    if p.get("description"):
+                        lines.append(f"  {p['description']}")
                 lines.append("")
                 all_items.extend(posts)
             except Exception as e:
