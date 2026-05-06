@@ -70,38 +70,12 @@ $ARGUMENTS에서 URL과 컨퍼런스명을 파싱합니다.
 - source_url: 추출 단계에서 받은 source_url
 - summary_markdown: 위에서 작성한 요약 마크다운 (섹션 4개)
 
-## 5. Git commit & push (저장 성공 시 항상 수행)
+## 5. 결과 출력
 
-저장이 성공하면 요약 파일을 GitHub에 자동으로 올립니다. Bash 도구로 다음 명령을 순차 실행하세요 (working directory: `/home/haen/conference-mcp`):
-
-1. 저장된 파일을 스테이징: `git add <save_summary_text가 반환한 절대 경로>`
-2. 커밋 (HEREDOC 사용):
-   ```
-   git commit -m "$(cat <<'EOF'
-   auto: add summary - <title>
-
-   Source: <source_url>
-   Conference: <conference_name>
-   EOF
-   )"
-   ```
-   - `<title>`, `<source_url>`, `<conference_name>`은 추출 단계에서 받은 값으로 치환
-3. 푸시: `git push origin main`
-
-각 명령은 sequential하게 (`&&` 체이닝 또는 단계별로) 실행하세요. 푸시 실패 시(네트워크/권한 등) 요약 저장 자체는 성공한 것이므로, 푸시 실패 메시지를 표시하되 전체를 실패로 처리하지는 마세요.
-
-## 6. 결과 출력
-
-요약 저장 + 푸시 모두 성공 시:
+요약 저장 성공 시:
 ```
-✅ 요약 완료 + GitHub 업로드 완료!
+✅ 요약 완료
 저장 위치: <save_summary_text가 반환한 경로>
-```
-
-요약은 성공했지만 푸시 실패 시:
-```
-✅ 요약 완료 (저장 위치: <경로>)
-⚠️ GitHub 푸시 실패: <오류 요약>
 ```
 
 요약 자체가 실패 시:
