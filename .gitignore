@@ -24,3 +24,8 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Personal automation layer (intentionally not shared)
+notify.py
+run_check.sh
+ca-bundle.pem
