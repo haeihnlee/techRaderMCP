@@ -31,7 +31,11 @@ run_check.sh
 ca-bundle.pem
 
 # 사내 자산 — 이 저장소는 PUBLIC 이므로 절대 추적하지 않는다.
-# 사내 Confluence 에서 수집한 webOS Luna Service API 문서 1,395건.
+# webOS Luna Service API 문서(사내 Confluence 수집)는 이 프로젝트와 무관하고
+# analyze-ux-scenario 스킬의 참조 자료다. 공유 위치로 옮겼다:
+#   ~/.claude/refs/luna-api-docs  (env LUNA_API_DOCS_PATH)
+# 다만 그 스킬의 기본 경로가 작업 디렉터리 기준이라 여기 다시 클론될 수 있으므로
+# 안전망으로 규칙을 남겨둔다.
 luna-api-docs/
 
 # Added by code-review-graph
