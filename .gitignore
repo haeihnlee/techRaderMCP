@@ -29,3 +29,10 @@ Thumbs.db
 notify.py
 run_check.sh
 ca-bundle.pem
+
+# 사내 자산 — 이 저장소는 PUBLIC 이므로 절대 추적하지 않는다.
+# 사내 Confluence 에서 수집한 webOS Luna Service API 문서 1,395건.
+luna-api-docs/
+
+# Added by code-review-graph
+.code-review-graph/
