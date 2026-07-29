@@ -583,6 +583,54 @@ def check_new_content(days: int = 7) -> str:
     return "\n".join(lines)
 
 
+# 스켈레톤만 받아온 페이지에서 흔히 남는 자리표시자 문구.
+# 이것만 있으면 본문이 없는 것과 같다.
+_PLACEHOLDER_MARKERS = (
+    "loading", "로딩", "please wait", "잠시만 기다",
+    "enable javascript", "javascript is required", "javascript를 활성화",
+    "checking your browser", "just a moment",
+    "access denied", "403 forbidden", "are you a robot",
+)
+
+# 정상 본문 하한. 실측 기준: 정상 문서 5,225자 / 고유줄 91% 대비
+# JS 렌더 실패 131자 / 고유줄 8% 로 분리가 뚜렷하다.
+_MIN_CONTENT_CHARS = 400
+
+
+def _detect_unusable_content(content: str, min_chars: int = _MIN_CONTENT_CHARS) -> str | None:
+    """요약해도 의미가 없는 본문을 걸러낸다. 문제가 있으면 사유, 없으면 None.
+
+    빈 문자열 검사만으로는 부족하다 — JS 렌더링 페이지는 "Loading..." 같은
+    자리표시자를 채워 200 OK 로 돌려주므로 비어 있지 않다. 그대로 통과시키면
+    빈 요약이 만들어져 저장·푸시까지 진행된다(2026-07 실제 발생).
+
+    min_chars 는 호출부에서 낮출 수 있다. YouTube 는 자막이 없을 때 영상 설명만
+    으로 요약한 정상 사례가 이미 있어(summaries 에 3건) 웹페이지와 같은 하한을
+    적용하면 오탐이 된다.
+    """
+    text = content.strip()
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return "본문이 비어 있음"
+
+    # 자리표시자 문구만으로 이뤄진 경우. 정상 페이지에도 "loading" 이 한 번쯤
+    # 나올 수 있으니, 전체 줄이 자리표시자일 때만 실패로 본다.
+    lowered = [ln.lower() for ln in lines]
+    if all(any(m in ln for m in _PLACEHOLDER_MARKERS) for ln in lowered):
+        return f"자리표시자 문구만 추출됨 ({lines[0][:40]!r})"
+
+    # 같은 줄이 반복되기만 하는 경우 (Loading... × 12 등).
+    # 줄이 충분히 많은데 고유 줄이 3개 이하면 실질 내용이 없다.
+    unique = len(set(lines))
+    if len(lines) >= 5 and unique <= 3:
+        return f"동일 문구 반복 (고유 {unique}줄 / 전체 {len(lines)}줄)"
+
+    if len(text) < min_chars:
+        return f"본문이 너무 짧음 ({len(text)}자 < {min_chars}자)"
+
+    return None
+
+
 @mcp.tool()
 def extract_url_content(url: str, conference_name: str = "기타") -> str:
     """
@@ -603,6 +651,11 @@ def extract_url_content(url: str, conference_name: str = "기타") -> str:
 
         ## 본문
         <transcript 또는 webpage 본문 텍스트, 12000자 절단>
+
+        추출에 실패하면 위 형식 대신 "오류:" 또는 "콘텐츠를 가져올 수 없습니다"
+        로 시작하는 한 줄 메시지를 반환한다. JS 렌더링 페이지처럼 200 OK 와
+        자리표시자("Loading...")만 돌아오는 경우도 실패로 처리하므로, 이 응답을
+        받으면 요약을 진행하지 말고 사용자에게 알려야 한다.
     """
     title = url
     content = ""
@@ -635,6 +688,18 @@ def extract_url_content(url: str, conference_name: str = "기타") -> str:
 
     if not content.strip():
         return "콘텐츠를 가져올 수 없습니다."
+
+    # YouTube 는 자막 없이 영상 설명만으로 요약한 정상 사례가 있어 하한을 낮춘다.
+    problem = _detect_unusable_content(
+        content, min_chars=120 if content_type == "youtube" else _MIN_CONTENT_CHARS
+    )
+    if problem:
+        return (
+            f"콘텐츠를 가져올 수 없습니다: {problem}\n"
+            f"(url: {url})\n"
+            "JS 렌더링 페이지이거나 봇 차단일 수 있습니다. 이 본문으로 요약하면 "
+            "빈 내용이 저장되므로 중단합니다."
+        )
 
     truncated = content[:12000] + ("..." if len(content) > 12000 else "")
 
