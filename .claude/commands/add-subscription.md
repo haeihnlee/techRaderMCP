@@ -30,7 +30,7 @@ URL 종류별 예시:
 **YouTube 채널 판별:**
 - URL에 `youtube.com/channel/` 포함 → `channel/` 뒤의 ID 추출 (예: `UCVHFbw7woebKtXIlUlFpyxRw`)
 - URL에 `youtube.com/@` 포함 → YouTube Data API로 핸들 → 채널 ID 변환 필요
-  - Bash 실행: `cd /home/haen/conference-mcp && source .env 2>/dev/null; .venv/bin/python -c "
+  - Bash 실행: `cd "$(git rev-parse --show-toplevel)" && source .env 2>/dev/null; .venv/bin/python -c "
 from googleapiclient.discovery import build
 import os
 from dotenv import load_dotenv

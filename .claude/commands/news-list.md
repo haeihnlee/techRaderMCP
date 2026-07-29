@@ -3,7 +3,7 @@ Show all saved conference summaries in the conference-mcp project.
 Run this bash command and display the results:
 
 ```bash
-find /home/haen/conference-mcp/summaries -name "*.md" | sort
+find "$(git rev-parse --show-toplevel)/summaries" -name "*.md" | sort
 ```
 
 Format the output as a grouped list by conference folder. For each file:

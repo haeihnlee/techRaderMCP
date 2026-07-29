@@ -240,6 +240,36 @@ YOUTUBE_API_KEY=AIza...         # YouTube Data API v3 키 (채널 새 영상 감
 
 Claude Code 재시작 → 슬래시 커맨드와 9개 MCP 도구 즉시 사용 가능.
 
+### 8.4 본인 저장소 연결 (요약을 쌓을 곳)
+
+`/add-link` 는 요약을 저장한 뒤 **`origin` 으로 자동 커밋·푸시**합니다.
+푸시 대상은 저장소의 `origin` 과 현재 브랜치를 그대로 쓰므로, 각자 본인 공간을
+연결하면 요약이 개인 저장소에 쌓입니다.
+
+**방법 1 — fork 후 clone** (원본 업데이트를 받아오기 쉬움)
+
+```bash
+# GitHub / mod.lge.com 웹에서 fork 후
+git clone <본인 fork URL> conference-mcp
+cd conference-mcp
+git remote add upstream <원본 URL>   # 원본 업데이트 받을 때: git pull upstream main
+```
+
+**방법 2 — 빈 저장소 새로 만들어 연결**
+
+```bash
+cd conference-mcp
+git remote remove origin              # 원본을 가리키던 origin 제거
+git remote add origin <본인 저장소 URL>
+git push -u origin main
+```
+
+> **확인**: `git remote -v` 의 `origin` 이 본인 저장소여야 합니다.
+> 원본을 그대로 가리키면 푸시가 권한 오류로 거부됩니다.
+
+`origin` 을 설정하지 않아도 요약은 **로컬에 정상 저장**됩니다 —
+푸시만 건너뛰고 안내 메시지가 나옵니다.
+
 ---
 
 ## 9. 사용 예시 (데모 흐름)

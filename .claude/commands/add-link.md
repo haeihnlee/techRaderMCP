@@ -72,12 +72,25 @@ $ARGUMENTS에서 URL과 컨퍼런스명을 파싱합니다.
 
 ## 5. Git commit & push (저장 성공 시 시도)
 
-저장이 성공하면 요약 파일을 GitHub에 자동으로 올립니다. Bash 도구로 다음 명령을 순차 실행하세요 (working directory: `/home/haen/conference-mcp`):
+저장이 성공하면 요약 파일을 **본인 저장소**에 올립니다.
 
-1. 저장된 파일을 스테이징: `git add <save_summary_text가 반환한 절대 경로>`
-2. 커밋 (HEREDOC 사용):
+푸시 대상은 사용자가 clone 한 저장소의 `origin` 과 현재 브랜치를 그대로 씁니다.
+저장소 URL·브랜치명을 이 파일에 적어두지 마세요 — 사용자마다 다릅니다.
+
+작업 디렉터리는 **저장된 요약 파일이 속한 저장소**입니다. 경로를 추측하지 말고
+`save_summary_text` 가 반환한 절대 경로에서 `git -C` 로 지정하세요.
+
+Bash 도구로 순차 실행:
+
+1. 저장소 루트와 현재 브랜치 확인:
+   ```bash
+   REPO=$(git -C "$(dirname '<저장된 절대 경로>')" rev-parse --show-toplevel)
+   BRANCH=$(git -C "$REPO" rev-parse --abbrev-ref HEAD)
    ```
-   git commit -m "$(cat <<'EOF'
+2. 스테이징: `git -C "$REPO" add '<저장된 절대 경로>'`
+3. 커밋 (HEREDOC 사용):
+   ```
+   git -C "$REPO" commit -m "$(cat <<'EOF'
    auto: add summary - <title>
 
    Source: <source_url>
@@ -86,9 +99,17 @@ $ARGUMENTS에서 URL과 컨퍼런스명을 파싱합니다.
    )"
    ```
    - `<title>`, `<source_url>`, `<conference_name>`은 추출 단계에서 받은 값으로 치환
-3. 푸시: `git push origin main`
+4. 푸시: `git -C "$REPO" push origin "$BRANCH"`
 
-각 명령은 sequential하게 실행하세요. 권한 거부·네트워크 오류 등으로 어느 단계든 실패하면 메시지로 표시하되 전체를 실패로 처리하지는 마세요 (요약 저장 자체는 이미 성공).
+**푸시 충돌 시** (원격에 새 커밋이 있어 거부되면) 한 번만 재시도:
+```bash
+git -C "$REPO" pull --rebase origin "$BRANCH" && git -C "$REPO" push origin "$BRANCH"
+```
+재시도까지 실패하면 커밋은 로컬에 남겨두고 사용자에게 알리세요.
+
+각 명령은 sequential하게 실행하세요. 권한 거부·네트워크 오류·`origin` 미설정 등으로
+어느 단계든 실패하면 메시지로 표시하되 전체를 실패로 처리하지는 마세요
+(요약 저장 자체는 이미 성공).
 
 ## 6. 결과 출력
 
@@ -101,7 +122,17 @@ $ARGUMENTS에서 URL과 컨퍼런스명을 파싱합니다.
 요약은 성공했지만 푸시 실패 시:
 ```
 ✅ 요약 완료 (저장 위치: <경로>)
-⚠️ GitHub 푸시 실패: <오류 요약>
+⚠️ 푸시 실패: <오류 요약>
+```
+
+`origin` 이 설정되지 않은 경우(공유받은 뒤 본인 저장소를 아직 안 만든 상태)는
+실패로 처리하지 말고 아래 안내를 덧붙이세요:
+```
+✅ 요약 완료 (저장 위치: <경로>)
+ℹ️ 원격 저장소(origin)가 없어 로컬에만 저장했습니다.
+   본인 저장소에 쌓으려면 한 번만 설정하세요:
+     git remote add origin <본인 저장소 URL>
+     git push -u origin <현재 브랜치>
 ```
 
 요약 자체가 실패 시:

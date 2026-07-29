@@ -6,7 +6,6 @@
         "code-review-graph",
         "serve"
       ],
-      "cwd": "/home/haen/conference-mcp",
       "type": "stdio"
     }
   }
