@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "conference-summarizer": {
+      "type": "stdio",
+      "command": "/home/haen/conference-mcp/.venv/bin/python",
+      "args": ["/home/haen/conference-mcp/server.py"]
+    }
+  }
+}
